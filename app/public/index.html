@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Order Rescue Lite</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 16px/1.5 system-ui, sans-serif; max-width: 680px; margin: 6vh auto; padding: 0 20px; }
+  h1 { font-size: 1.4rem; margin-bottom: .2rem; }
+  p.sub { margin-top: 0; opacity: .7; }
+  button { font: inherit; padding: .6rem 1.1rem; border: 0; border-radius: 8px;
+           background: #2563eb; color: #fff; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  .answer { white-space: pre-wrap; background: #0001; padding: 1rem; border-radius: 8px; margin-top: 1rem; }
+  .stats { display: flex; gap: 1.2rem; flex-wrap: wrap; margin-top: 1rem; font-size: .9rem; }
+  .stat b { display: block; font-size: 1.4rem; }
+  /* backend reads is the whole point: red when the app re-reads, green when it reads once. */
+  .reads b.bad  { color: #dc2626; }
+  .reads b.good { color: #16a34a; }
+  .meta { margin-top: 1rem; font-size: .8rem; opacity: .7; }
+  .meta code { background: #0001; padding: .1rem .35rem; border-radius: 4px; }
+  code { background: #0001; padding: .1rem .35rem; border-radius: 4px; font-size: .85em; }
+</style>
+</head>
+<body>
+  <h1>Order Rescue Lite</h1>
+  <p class="sub">Ask the agent about synthetic order <code>DEMO-1001</code>. Watch the backend read count and the latency.</p>
+
+  <button id="ask">Ask the agent</button>
+
+  <div id="out" hidden>
+    <div class="answer" id="answer"></div>
+    <div class="stats">
+      <div class="stat reads"><b id="reads">–</b>backend reads</div>
+      <div class="stat"><b id="tools">–</b>tool calls</div>
+      <div class="stat"><b id="models">–</b>model calls</div>
+      <div class="stat"><b id="ms">–</b>ms</div>
+    </div>
+    <p class="meta" id="meta"></p>
+  </div>
+
+<script>
+const btn = document.getElementById("ask");
+btn.addEventListener("click", async () => {
+  btn.disabled = true; btn.textContent = "Asking…";
+  try {
+    const r = await fetch("/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    const d = await r.json();
+    document.getElementById("out").hidden = false;
+    document.getElementById("answer").textContent = d.answer || ("Error: " + (d.error || "unknown"));
+
+    const reads = d.backend_reads;
+    const readsEl = document.getElementById("reads");
+    readsEl.textContent = reads ?? "–";
+    // one read = good (green), more than one = the defect (red)
+    readsEl.className = reads === 1 ? "good" : (reads > 1 ? "bad" : "");
+
+    document.getElementById("tools").textContent = d.tool_calls ?? "–";
+    document.getElementById("models").textContent = d.model_calls ?? "–";
+    document.getElementById("ms").textContent = d.elapsed_ms ?? "–";
+
+    const bits = [];
+    if (d.platform) bits.push("platform: " + d.platform);
+    if (d.mode) bits.push("mode: " + d.mode);
+    if (d.trace_id) bits.push("trace: " + d.trace_id);
+    document.getElementById("meta").innerHTML =
+      bits.map(b => b.startsWith("trace") ? "<code>" + b + "</code>" : b).join("  ·  ");
+  } catch (e) {
+    alert("Request failed: " + e);
+  } finally {
+    btn.disabled = false; btn.textContent = "Ask the agent";
+  }
+});
+</script>
+</body>
+</html>
